@@ -21,3 +21,32 @@ LEFT JOIN passenger_load as pl ON f.flight_id = pl.flight_id
 WHERE f.status = 'completed'
 GROUP BY f.aircraft_id, DATE(f.scheduled_departure)
 ORDER BY f.aircraft_id, flight_date;
+
+#Question : flight_cost_analysis
+
+SELECT
+    flight_id, load_proxy_metric, total_cost, cost_per_boarded_seat
+FROM (
+    SELECT
+        f.flight_id,
+
+        COALESCE(pl.boarded_seats, 0) AS load_proxy_metric,
+
+        COALESCE(fc.fuel_cost, 0) + COALESCE(fc.crew_cost, 0) + COALESCE(fc.airport_fee, 0) + COALESCE(fc.delay_penalty_cost, 0) AS total_cost,
+
+        (
+            COALESCE(fc.fuel_cost, 0) + COALESCE(fc.crew_cost, 0) + COALESCE(fc.airport_fee, 0) + COALESCE(fc.delay_penalty_cost, 0)
+        )/ NULLIF(COALESCE(pl.boarded_seats, 0), 0) AS cost_per_boarded_seat,
+
+        ROW_NUMBER() OVER (
+            ORDER BY
+                (
+                    COALESCE(fc.fuel_cost, 0) + COALESCE(fc.crew_cost, 0) + COALESCE(fc.airport_fee, 0) + COALESCE(fc.delay_penalty_cost, 0)
+                )/ NULLIF(COALESCE(pl.boarded_seats, 0), 0) DESC) AS rn
+
+    FROM flightsss f
+    LEFT JOIN passenger_load pl
+           ON f.flight_id = pl.flight_id
+    LEFT JOIN flight_costs fc
+           ON f.flight_id = fc.flight_id) ranked
+WHERE rn <= 3;
